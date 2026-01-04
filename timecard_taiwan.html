@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>班數/班費計算機（日期時間版，8/6/6/4 半班）</title>
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif; }
+    body { margin: 0; background: #f6f7f9; color: #111; }
+    .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px 40px; }
+    .card { background: #fff; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 18px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .sub { color: #555; font-size: 13px; line-height: 1.45; margin-bottom: 14px; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #f0f3ff; color: #2a46c7; font-size: 12px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 13px; color: #333; margin-bottom: 6px; }
+    input, select, button { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px; border: 1px solid #d8dbe2; font-size: 14px; background: #fff; }
+    input:focus, select:focus { outline: none; border-color: #6b8cff; box-shadow: 0 0 0 3px rgba(107,140,255,.15); }
+
+    input[disabled] { background: #f3f4f7; color: #444; }
+
+    .muted { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.5; }
+    .warn { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff4e5; border: 1px solid #ffe1b5; color: #7a4a00; font-size: 13px; display: none; }
+
+    .out { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .out { grid-template-columns: 1fr; } }
+
+    .stat { border: 1px solid #eef0f5; background: #fbfcff; border-radius: 14px; padding: 12px; }
+    .stat .k { font-size: 12px; color: #555; }
+    .stat .v { font-size: 20px; font-weight: 700; margin-top: 4px; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 720px) { .row2 { grid-template-columns: 1fr; } }
+
+    .actions { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .actions { grid-template-columns: 1fr; } }
+
+    button { cursor: pointer; border: none; background: #111; color: #fff; }
+    button.secondary { background: #eef0f5; color: #111; border: 1px solid #d8dbe2; }
+    button.ghost { background: #fff; color: #111; border: 1px solid #d8dbe2; }
+
+    .note { margin-top: 12px; font-size: 12px; color: #666; line-height: 1.55; }
+
+    /* datetime input with side button */
+    .dtRow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    .smallBtn { width: auto; padding: 10px 12px; border-radius: 12px; border: 1px solid #d8dbe2; background: #fff; color: #111; cursor: pointer; }
+    .smallBtn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>班數 / 班費計算機 <span class="pill">日期時間版（支援>24h）</span></h1>
+      <div class="sub">
+        預設：開啟頁面當下＝收工時間（結束）；開工時間預設為「結束時間往前 8 小時（1 班）」。<br>
+        班數規則：0–8h=1；8–11=1.5；11–14=2；14–17=2.5；17–20=3；20–22=3.5；22–24=4；24h後每+2h=+0.5班。
+      </div>
+
+      <div class="grid">
+        <div>
+          <label>開始（年月日＋時間）</label>
+          <div class="dtRow">
+            <input id="startDT" type="datetime-local" />
+            <button id="minusHalfStartBtn" class="smallBtn" type="button">-0.5 小時</button>
+          </div>
+          <div class="muted">按「-0.5 小時」會把開工時間往前推 30 分鐘（跨日自動）。</div>
+        </div>
+
+        <div>
+          <label>結束（年月日＋時間）</label>
+          <div class="dtRow">
+            <input id="endDT" type="datetime-local" />
+            <button id="plusHalfEndBtn" class="smallBtn" type="button">+0.5 小時</button>
+          </div>
+          <div class="muted">按「+0.5 小時」會把收工時間往後推 30 分鐘（跨日自動）。</div>
+        </div>
+
+        <div>
+          <label>角色 / 預設班費</label>
+          <select id="rateMode">
+            <option value="assistant" selected>助理（3600/班，鎖定）</option>
+            <option value="leader">領班（5000/班，鎖定）</option>
+            <option value="custom">自選（可輸入班費）</option>
+          </select>
+          <div class="muted">只有選「自選」時，班費欄位才可修改。</div>
+        </div>
+
+        <div>
+          <label>班費（每班）</label>
+          <input id="ratePerShift" type="number" min="0" step="1" value="3600" disabled />
+          <div class="muted">稅前 = 班數 × 班費；含稅 = 稅前 × (1 + 稅率)。</div>
+        </div>
+
+        <div>
+          <label>稅率（發票加成）</label>
+          <select id="taxRate">
+            <option value="0.05" selected>5%（一般開發票）</option>
+            <option value="0">0%（不加稅）</option>
+          </select>
+        </div>
+
+        <div>
+          <label>顯示設定</label>
+          <select id="rounding">
+            <option value="int" selected>金額取整數</option>
+            <option value="none">保留小數</option>
+          </select>
+        </div>
+
+        <div>
+          <label>備註（可空白）</label>
+          <input id="memo" type="text" placeholder="例如：Mayday 夢想棚 / 車拍 / 夜戲" />
+        </div>
+
+        <div>
+          <label>時區</label>
+          <input id="tz" type="text" disabled />
+        </div>
+      </div>
+
+      <div id="warnBox" class="warn"></div>
+
+      <div class="out">
+        <div class="stat">
+          <div class="k">總工時</div>
+          <div class="v" id="hoursOut">—</div>
+        </div>
+        <div class="stat">
+          <div class="k">班數</div>
+          <div class="v" id="shiftsOut">—</div>
+        </div>
+        <div class="stat">
+          <div class="k">稅前（未稅）金額</div>
+          <div class="v" id="pretaxOut">—</div>
+        </div>
+        <div class="stat">
+          <div class="k">開發票後（含稅）金額</div>
+          <div class="v" id="taxedOut">—</div>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="stat">
+          <div class="k">計算摘要</div>
+          <div class="v" id="explainOut" style="font-size:14px;font-weight:600;line-height:1.55;">—</div>
+        </div>
+        <div class="stat">
+          <div class="k">一鍵複製內容預覽</div>
+          <div class="v" id="copyPreview" style="font-size:14px;font-weight:600;line-height:1.55;">—</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="copyBtn" class="secondary" type="button">複製結果</button>
+        <button id="back8Btn" class="ghost" type="button">開始 = 結束往前 8 小時</button>
+        <button id="resetBtn" type="button">重設（重新帶入現在時間）</button>
+      </div>
+
+      <div class="note">
+        小提醒：因為你已輸入日期，若結束早於開始，請直接把結束日期改到正確那一天（不再用“自動跨日”猜測）。
+      </div>
+    </div>
+  </div>
+
+<script>
+  function calcShiftsByMinutes(totalMinutes) {
+    if (totalMinutes <= 0) return 0;
+    const t = totalMinutes;
+    const H = (h) => h * 60;
+
+    if (t <= H(8))  return 1;
+    if (t <= H(11)) return 1.5;
+    if (t <= H(14)) return 2;
+    if (t <= H(17)) return 2.5;
+    if (t <= H(20)) return 3;
+    if (t <= H(22)) return 3.5;
+    if (t <= H(24)) return 4;
+
+    const extra = t - H(24);
+    const halfSteps = Math.ceil(extra / H(2));
+    return 4 + halfSteps * 0.5;
+  }
+
+  function pad2(n) { return String(n).padStart(2, "0"); }
+
+  function toDTLocalValue(d) {
+    const y = d.getFullYear();
+    const m = pad2(d.getMonth() + 1);
+    const day = pad2(d.getDate());
+    const hh = pad2(d.getHours());
+    const mm = pad2(d.getMinutes());
+    return `${y}-${m}-${day}T${hh}:${mm}`;
+  }
+
+  function parseDTLocal(value) {
+    const [datePart, timePart] = value.split("T");
+    if (!datePart || !timePart) return null;
+    const [y, m, d] = datePart.split("-").map(Number);
+    const [hh, mm] = timePart.split(":").map(Number);
+    return new Date(y, m - 1, d, hh, mm, 0, 0);
+  }
+
+  function fmtMoney(n, roundingMode) {
+    if (roundingMode === "int") return Math.round(n).toLocaleString("zh-Hant-TW");
+    return n.toLocaleString("zh-Hant-TW", { maximumFractionDigits: 2 });
+  }
+
+  function fmtHoursMinutes(totalMinutes) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${h} 小時 ${m} 分`;
+  }
+
+  const startDT = document.getElementById("startDT");
+  const endDT = document.getElementById("endDT");
+  const rateMode = document.getElementById("rateMode");
+  const ratePerShift = document.getElementById("ratePerShift");
+  const taxRate = document.getElementById("taxRate");
+  const rounding = document.getElementById("rounding");
+  const memo = document.getElementById("memo");
+  const tz = document.getElementById("tz");
+
+  const warnBox = document.getElementById("warnBox");
+  const hoursOut = document.getElementById("hoursOut");
+  const shiftsOut = document.getElementById("shiftsOut");
+  const pretaxOut = document.getElementById("pretaxOut");
+  const taxedOut = document.getElementById("taxedOut");
+  const explainOut = document.getElementById("explainOut");
+  const copyPreview = document.getElementById("copyPreview");
+
+  let lastCustomRate = 3600; // 自選預設先跟助理一致
+
+  function showWarn(msg) {
+    warnBox.textContent = msg;
+    warnBox.style.display = "block";
+  }
+  function clearWarn() {
+    warnBox.textContent = "";
+    warnBox.style.display = "none";
+  }
+
+  function setDefaultsToNow() {
+    const now = new Date();
+    endDT.value = toDTLocalValue(now);
+    const start = new Date(now.getTime() - 8 * 60 * 60 * 1000);
+    startDT.value = toDTLocalValue(start);
+  }
+
+  function applyRateMode() {
+    const mode = rateMode.value;
+
+    if (mode === "assistant") {
+      ratePerShift.value = 3600;
+      ratePerShift.disabled = true;
+    } else if (mode === "leader") {
+      ratePerShift.value = 5000;
+      ratePerShift.disabled = true;
+    } else {
+      ratePerShift.disabled = false;
+      ratePerShift.value = lastCustomRate;
+      setTimeout(() => ratePerShift.focus(), 0);
+    }
+  }
+
+  function bumpDT(dtInputEl, deltaMinutes) {
+    if (!dtInputEl.value) return;
+    const d = parseDTLocal(dtInputEl.value);
+    if (!d) return;
+    const bumped = new Date(d.getTime() + deltaMinutes * 60 * 1000);
+    dtInputEl.value = toDTLocalValue(bumped);
+    calculate();
+  }
+
+  function calculate() {
+    clearWarn();
+
+    if (!startDT.value || !endDT.value) return;
+
+    const s = parseDTLocal(startDT.value);
+    const e = parseDTLocal(endDT.value);
+    if (!s || !e) return;
+
+    const diffMs = e.getTime() - s.getTime();
+    if (diffMs <= 0) {
+      showWarn("⚠️ 結束時間早於（或等於）開始時間。請把結束日期/時間改到正確那一天。");
+      hoursOut.textContent = "—";
+      shiftsOut.textContent = "—";
+      pretaxOut.textContent = "—";
+      taxedOut.textContent = "—";
+      explainOut.textContent = "—";
+      copyPreview.textContent = "—";
+      return;
+    }
+
+    const totalMinutes = Math.round(diffMs / 60000);
+    const shifts = calcShiftsByMinutes(totalMinutes);
+
+    const rate = Number(ratePerShift.value || 0);
+    const pretax = shifts * rate;
+
+    const tax = Number(taxRate.value || 0);
+    const taxed = pretax * (1 + tax);
+
+    const shiftsText = shifts.toFixed(1).replace(/\.0$/, "");
+
+    hoursOut.textContent = fmtHoursMinutes(totalMinutes);
+    shiftsOut.textContent = shiftsText;
+    pretaxOut.textContent = `$ ${fmtMoney(pretax, rounding.value)}`;
+    taxedOut.textContent = `$ ${fmtMoney(taxed, rounding.value)}`;
+
+    explainOut.textContent = `${shiftsText} 班 × ${rate.toLocaleString("zh-Hant-TW")} = $ ${fmtMoney(pretax, rounding.value)}`;
+
+    const memoTxt = memo.value ? `（${memo.value}）` : "";
+    copyPreview.textContent =
+      `開始：${startDT.value.replace("T"," ")}｜結束：${endDT.value.replace("T"," ")} ${memoTxt}\n` +
+      `工時：${hoursOut.textContent}\n` +
+      `班數：${shiftsText}\n` +
+      `班費：${ratePerShift.value}/班\n` +
+      `稅前：$ ${fmtMoney(pretax, rounding.value)}\n` +
+      `含稅：$ ${fmtMoney(taxed, rounding.value)}`;
+  }
+
+  // Buttons
+  document.getElementById("minusHalfStartBtn").addEventListener("click", () => bumpDT(startDT, -30));
+  document.getElementById("plusHalfEndBtn").addEventListener("click", () => bumpDT(endDT, +30));
+
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(copyPreview.textContent);
+      alert("已複製到剪貼簿");
+    } catch {
+      alert("複製失敗（可能是瀏覽器權限），你可以手動複製右側內容。");
+    }
+  });
+
+  document.getElementById("back8Btn").addEventListener("click", () => {
+    if (!endDT.value) return;
+    const e = parseDTLocal(endDT.value);
+    if (!e) return;
+    const s = new Date(e.getTime() - 8 * 60 * 60 * 1000);
+    startDT.value = toDTLocalValue(s);
+    calculate();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    // 重設回「助理」為預設
+    rateMode.value = "assistant";
+    taxRate.value = "0.05";
+    rounding.value = "int";
+    memo.value = "";
+    setDefaultsToNow();
+    applyRateMode();
+    calculate();
+  });
+
+  // Events
+  rateMode.addEventListener("change", () => {
+    // 若離開自選，記住最後一次自選數字
+    if (!ratePerShift.disabled) lastCustomRate = Number(ratePerShift.value || lastCustomRate);
+    applyRateMode();
+    calculate();
+  });
+
+  ratePerShift.addEventListener("input", () => {
+    if (!ratePerShift.disabled) lastCustomRate = Number(ratePerShift.value || lastCustomRate);
+    calculate();
+  });
+
+  [startDT, endDT, taxRate, rounding, memo].forEach(el => {
+    el.addEventListener("input", calculate);
+    el.addEventListener("change", calculate);
+  });
+
+  // Init
+  tz.value = Intl.DateTimeFormat().resolvedOptions().timeZone || "（未知）";
+  setDefaultsToNow();
+  applyRateMode(); // will set 3600 & lock
+  calculate();
+</script>
+</body>
+</html>
