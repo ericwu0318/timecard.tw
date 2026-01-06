@@ -56,7 +56,6 @@
     }
     .smallBtn:active { transform: translateY(1px); }
 
-    /* small screen: keep input full-width, buttons next line */
     @media (max-width: 420px) {
       .dtRow { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; }
       .dtRow input { grid-column: 1 / -1; }
@@ -100,8 +99,8 @@
         </div>
 
         <div>
-          <label>製片</label>
-          <input id="producer" type="text" placeholder="例如：大黑 / 阿佑" />
+          <label>製片 / 攝影師</label>
+          <input id="producer" type="text" placeholder="例如：大黑 / 阿佑 / 光哲" />
         </div>
 
         <div>
@@ -119,6 +118,11 @@
         </div>
 
         <div>
+          <label>案名</label>
+          <input id="projectName" type="text" placeholder="例如：Mayday 夢想棚 / Porsche / 動力火車MV" />
+        </div>
+
+        <div>
           <label>角色 / 預設班費</label>
           <select id="rateMode">
             <option value="assistant" selected>助理（3600/班，鎖定）</option>
@@ -131,7 +135,6 @@
         <div>
           <label>班費（每班）</label>
           <input id="ratePerShift" type="number" min="0" step="1" value="3600" disabled />
-          <div class="muted">稅前 = 班數 × 班費；含稅 = 稅前 × (1 + 稅率)。</div>
         </div>
 
         <div>
@@ -148,11 +151,6 @@
             <option value="int" selected>金額取整數</option>
             <option value="none">保留小數</option>
           </select>
-        </div>
-
-        <div>
-          <label>備註（可空白）</label>
-          <input id="memo" type="text" placeholder="例如：Mayday 夢想棚 / 車拍 / 夜戲" />
         </div>
 
         <div>
@@ -188,8 +186,9 @@
           <div class="v" id="explainOut" style="font-size:14px;font-weight:600;line-height:1.55;">—</div>
         </div>
         <div class="stat">
-          <div class="k">一鍵複製（班表紀錄）</div>
-          <div class="v" id="copyPreview" style="font-size:14px;font-weight:600;line-height:1.55; white-space:pre-wrap;">—</div>
+          <div class="k">一鍵複製（班表單行）</div>
+          <div class="v" id="copyPreview" style="font-size:14px;font-weight:700;line-height:1.55; word-break:break-all;">—</div>
+          <div class="muted">格式：日期_公司_製片/攝影師_案名_職位_金額/含稅價_班數</div>
         </div>
       </div>
 
@@ -206,7 +205,6 @@
   </div>
 
 <script>
-  // 班數規則：8/6/6/4... + 半班（每+2小時=+0.5班）
   function calcShiftsByMinutes(totalMinutes) {
     if (totalMinutes <= 0) return 0;
     const t = totalMinutes;
@@ -227,7 +225,6 @@
 
   function pad2(n) { return String(n).padStart(2, "0"); }
 
-  // Date -> "YYYY-MM-DDTHH:MM" for datetime-local
   function toDTLocalValue(d) {
     const y = d.getFullYear();
     const m = pad2(d.getMonth() + 1);
@@ -237,7 +234,6 @@
     return `${y}-${m}-${day}T${hh}:${mm}`;
   }
 
-  // "YYYY-MM-DDTHH:MM" -> Date (local)
   function parseDTLocal(value) {
     const [datePart, timePart] = value.split("T");
     if (!datePart || !timePart) return null;
@@ -247,8 +243,9 @@
   }
 
   function fmtMoney(n, roundingMode) {
-    if (roundingMode === "int") return Math.round(n).toLocaleString("zh-Hant-TW");
-    return n.toLocaleString("zh-Hant-TW", { maximumFractionDigits: 2 });
+    const v = (roundingMode === "int") ? Math.round(n) : n;
+    if (roundingMode === "int") return v.toLocaleString("zh-Hant-TW");
+    return v.toLocaleString("zh-Hant-TW", { maximumFractionDigits: 2 });
   }
 
   function fmtHoursMinutes(totalMinutes) {
@@ -257,15 +254,15 @@
     return `${h}小時${m}分`;
   }
 
-  function ymd(d) {
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  function mmdd(dateObj) {
+    // 你常用 01/05 這種格式
+    return `${pad2(dateObj.getMonth()+1)}/${pad2(dateObj.getDate())}`;
   }
-  function hm(d) {
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  }
-  function weekdayZh(d) {
-    const w = ["日","一","二","三","四","五","六"][d.getDay()];
-    return `週${w}`;
+
+  function roleText() {
+    if (rateMode.value === "assistant") return "助理";
+    if (rateMode.value === "leader") return "領班";
+    return "自選";
   }
 
   const startDT = document.getElementById("startDT");
@@ -273,14 +270,14 @@
 
   const prodCompany = document.getElementById("prodCompany");
   const producer = document.getElementById("producer");
-  const producerPhone = document.getElementById("producerPhone");
-  const payType = document.getElementById("payType");
+  const producerPhone = document.getElementById("producerPhone"); // 目前不塞到單行格式（你若想加我再加）
+  const payType = document.getElementById("payType");            // 同上
+  const projectName = document.getElementById("projectName");
 
   const rateMode = document.getElementById("rateMode");
   const ratePerShift = document.getElementById("ratePerShift");
   const taxRate = document.getElementById("taxRate");
   const rounding = document.getElementById("rounding");
-  const memo = document.getElementById("memo");
   const tz = document.getElementById("tz");
 
   const warnBox = document.getElementById("warnBox");
@@ -291,16 +288,10 @@
   const explainOut = document.getElementById("explainOut");
   const copyPreview = document.getElementById("copyPreview");
 
-  let lastCustomRate = 3600; // 自選預設先跟助理一致
+  let lastCustomRate = 3600;
 
-  function showWarn(msg) {
-    warnBox.textContent = msg;
-    warnBox.style.display = "block";
-  }
-  function clearWarn() {
-    warnBox.textContent = "";
-    warnBox.style.display = "none";
-  }
+  function showWarn(msg) { warnBox.textContent = msg; warnBox.style.display = "block"; }
+  function clearWarn() { warnBox.textContent = ""; warnBox.style.display = "none"; }
 
   function setDefaultsToNow() {
     const now = new Date();
@@ -311,38 +302,26 @@
 
   function applyRateMode() {
     const mode = rateMode.value;
-
-    if (mode === "assistant") {
-      ratePerShift.value = 3600;
-      ratePerShift.disabled = true;
-    } else if (mode === "leader") {
-      ratePerShift.value = 5000;
-      ratePerShift.disabled = true;
-    } else {
-      ratePerShift.disabled = false;
-      ratePerShift.value = lastCustomRate;
-      setTimeout(() => ratePerShift.focus(), 0);
-    }
+    if (mode === "assistant") { ratePerShift.value = 3600; ratePerShift.disabled = true; }
+    else if (mode === "leader") { ratePerShift.value = 5000; ratePerShift.disabled = true; }
+    else { ratePerShift.disabled = false; ratePerShift.value = lastCustomRate; setTimeout(() => ratePerShift.focus(), 0); }
   }
 
   function bumpDT(dtInputEl, deltaMinutes) {
     if (!dtInputEl.value) return;
     const d = parseDTLocal(dtInputEl.value);
     if (!d) return;
-    const bumped = new Date(d.getTime() + deltaMinutes * 60 * 1000);
-    dtInputEl.value = toDTLocalValue(bumped);
+    dtInputEl.value = toDTLocalValue(new Date(d.getTime() + deltaMinutes * 60000));
     calculate();
   }
 
-  function roleText() {
-    if (rateMode.value === "assistant") return "助理";
-    if (rateMode.value === "leader") return "領班";
-    return "自選";
+  function safeText(s) {
+    // 避免底線破壞欄位：把底線替換成全形底線
+    return (s || "—").trim().replaceAll("_", "＿");
   }
 
   function calculate() {
     clearWarn();
-
     if (!startDT.value || !endDT.value) return;
 
     const s = parseDTLocal(startDT.value);
@@ -352,12 +331,7 @@
     const diffMs = e.getTime() - s.getTime();
     if (diffMs <= 0) {
       showWarn("⚠️ 結束時間早於（或等於）開始時間。請把結束日期/時間改到正確那一天。");
-      hoursOut.textContent = "—";
-      shiftsOut.textContent = "—";
-      pretaxOut.textContent = "—";
-      taxedOut.textContent = "—";
-      explainOut.textContent = "—";
-      copyPreview.textContent = "—";
+      hoursOut.textContent = shiftsOut.textContent = pretaxOut.textContent = taxedOut.textContent = explainOut.textContent = copyPreview.textContent = "—";
       return;
     }
 
@@ -366,7 +340,6 @@
 
     const rate = Number(ratePerShift.value || 0);
     const pretax = shifts * rate;
-
     const tax = Number(taxRate.value || 0);
     const taxed = pretax * (1 + tax);
 
@@ -376,31 +349,19 @@
     shiftsOut.textContent = shiftsText;
     pretaxOut.textContent = `$ ${fmtMoney(pretax, rounding.value)}`;
     taxedOut.textContent = `$ ${fmtMoney(taxed, rounding.value)}`;
-
     explainOut.textContent = `${shiftsText} 班 × ${rate.toLocaleString("zh-Hant-TW")} = $ ${fmtMoney(pretax, rounding.value)}`;
 
-    // -------- Copy (A) concise --------
-    const sDate = ymd(s);
-    const eDate = ymd(e);
-    const sameDay = (sDate === eDate);
+    // ===== 單行班表格式 =====
+    const dateText = mmdd(s); // 用開始日期當「日期」
+    const companyText = safeText(prodCompany.value);
+    const producerText = safeText(producer.value);
+    const projectText = safeText(projectName.value);
+    const role = roleText();
 
-    const line1 = sameDay
-      ? `${sDate}（${weekdayZh(s)}） ${hm(s)}-${hm(e)}｜${hoursOut.textContent}｜${shiftsText}班`
-      : `開始 ${sDate} ${hm(s)}｜結束 ${eDate} ${hm(e)}｜${hoursOut.textContent}｜${shiftsText}班`;
+    const moneyText = `$${fmtMoney(pretax, rounding.value)}/$${fmtMoney(taxed, rounding.value)}`;
+    const line = `${dateText}_${companyText}_${producerText}_${projectText}_${role}_${moneyText}_${shiftsText}班`;
 
-    const line2 = `${roleText()} ${rate.toLocaleString("zh-Hant-TW")}/班｜未稅${fmtMoney(pretax, rounding.value)}｜含稅${fmtMoney(taxed, rounding.value)}`;
-
-    const comp = (prodCompany.value || "—");
-    const prod = (producer.value || "—");
-    const phone = (producerPhone.value || "—");
-    const pay = (payType.value || "—");
-
-    const line3 = `公司:${comp}｜製片:${prod}｜${phone}｜收款:${pay}`;
-
-    const note = (memo.value || "—");
-    const line4 = `備註:${note}`;
-
-    copyPreview.textContent = `${line1}\n${line2}\n${line3}\n${line4}`;
+    copyPreview.textContent = line;
   }
 
   // Buttons: start/end ±0.5h
@@ -410,41 +371,34 @@
   document.getElementById("endPlusBtn").addEventListener("click", () => bumpDT(endDT, +30));
 
   document.getElementById("copyBtn").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(copyPreview.textContent);
-      alert("已複製到剪貼簿");
-    } catch {
-      alert("複製失敗（可能是瀏覽器權限），你可以手動複製右側內容。");
-    }
+    try { await navigator.clipboard.writeText(copyPreview.textContent); alert("已複製到剪貼簿"); }
+    catch { alert("複製失敗（可能是瀏覽器權限），你可以手動複製右側內容。"); }
   });
 
   document.getElementById("back8Btn").addEventListener("click", () => {
     if (!endDT.value) return;
     const e = parseDTLocal(endDT.value);
     if (!e) return;
-    const s = new Date(e.getTime() - 8 * 60 * 60 * 1000);
-    startDT.value = toDTLocalValue(s);
+    startDT.value = toDTLocalValue(new Date(e.getTime() - 8 * 60 * 60 * 1000));
     calculate();
   });
 
   document.getElementById("resetBtn").addEventListener("click", () => {
-    // reset to assistant default
     rateMode.value = "assistant";
     taxRate.value = "0.05";
     rounding.value = "int";
-    memo.value = "";
 
     prodCompany.value = "";
     producer.value = "";
     producerPhone.value = "";
     payType.value = "";
+    projectName.value = "";
 
     setDefaultsToNow();
     applyRateMode();
     calculate();
   });
 
-  // Events
   rateMode.addEventListener("change", () => {
     if (!ratePerShift.disabled) lastCustomRate = Number(ratePerShift.value || lastCustomRate);
     applyRateMode();
@@ -456,7 +410,7 @@
     calculate();
   });
 
-  [startDT, endDT, taxRate, rounding, memo, prodCompany, producer, producerPhone, payType].forEach(el => {
+  [startDT, endDT, taxRate, rounding, prodCompany, producer, producerPhone, payType, projectName].forEach(el => {
     el.addEventListener("input", calculate);
     el.addEventListener("change", calculate);
   });
@@ -464,7 +418,7 @@
   // Init
   tz.value = Intl.DateTimeFormat().resolvedOptions().timeZone || "（未知）";
   setDefaultsToNow();
-  applyRateMode(); // assistant 3600 locked
+  applyRateMode();
   calculate();
 </script>
 </body>
