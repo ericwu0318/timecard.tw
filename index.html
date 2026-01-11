@@ -115,7 +115,7 @@
         </div>
 
         <div>
-          <label>攝影</label>
+          <label>攝影師</label>
           <input id="dp" type="text" placeholder="例如：阿詮 / Kenny / 光哲" />
         </div>
 
@@ -127,9 +127,9 @@
         <div>
           <label>收款類型</label>
           <select id="payType">
-            <option value="">（未選）</option>
-            <option value="匯款">匯款</option>
             <option value="回郵">回郵</option>
+            <option value="匯款">匯款</option>
+            <option value="回郵">現金</option>
           </select>
         </div>
 
@@ -139,10 +139,10 @@
         </div>
 
         <div>
-          <label>角色 / 預設班費</label>
+          <label>職位</label>
           <select id="rateMode">
-            <option value="assistant" selected>助理（3600/班，鎖定）</option>
-            <option value="leader">領班（5000/班，鎖定）</option>
+            <option value="assistant" selected>助理（3600/班）</option>
+            <option value="leader">領班（5000/班）</option>
             <option value="custom">自選（可輸入班費）</option>
           </select>
           <div class="muted">只有選「自選」時，班費欄位才可修改。</div>
@@ -154,7 +154,7 @@
         </div>
 
         <div>
-          <label>稅率（發票加成）</label>
+          <label>營所稅（發票加成）</label>
           <select id="taxRate">
             <option value="0.05" selected>5%（一般開發票）</option>
             <option value="0">0%（不加稅）</option>
