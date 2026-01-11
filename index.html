@@ -385,7 +385,7 @@
     const sameDay = ymd(s) === ymd(e);
     const timeLine = sameDay
       ? `${ymd(s)}（${weekdayZh(s)}） ${hm(s)}-${hm(e)}｜工時${hoursOut.textContent}｜${shiftsText}班`
-      : `開始 ${ymd(s)} ${hm(s)}｜結束 ${ymd(e)} ${hm(e)}｜工時${hoursOut.textContent}｜${shiftsText}班`;
+      : `${ymd(s)} ${hm(s)} 開始 ｜${ymd(e)} ${hm(e)} 收工｜工時${hoursOut.textContent}｜${shiftsText}班`;
 
     copyPreviewDetail.textContent =
       `${timeLine}\n` +
