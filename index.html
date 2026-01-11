@@ -217,7 +217,6 @@
       <div class="actions">
         <button id="copyOneBtn" class="secondary" type="button">複製：單行</button>
         <button id="copyDetailBtn" class="secondary" type="button">複製：詳細</button>
-        <button id="back8Btn" class="ghost" type="button">開始 = 結束往前 8 小時</button>
         <button id="resetBtn" type="button">重設（重新帶入現在時間）</button>
       </div>
 
@@ -327,7 +326,7 @@
   function setDefaultsToNow() {
     const now = new Date();
     endDT.value = toDTLocalValue(now);
-    startDT.value = toDTLocalValue(new Date(now.getTime() - 8 * 60 * 60 * 1000));
+    startDT.value = toDTLocalValue(new Date(now.getTime() - 11 * 60 * 60 * 1000));
   }
 
   function applyRateMode() {
@@ -412,13 +411,6 @@
   document.getElementById("copyDetailBtn").addEventListener("click", () => copyText(copyPreviewDetail.textContent));
 
   // 其他按鈕
-  document.getElementById("back8Btn").addEventListener("click", () => {
-    if (!endDT.value) return;
-    const e = parseDTLocal(endDT.value);
-    if (!e) return;
-    startDT.value = toDTLocalValue(new Date(e.getTime() - 8 * 60 * 60 * 1000));
-    calculate();
-  });
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     rateMode.value = "assistant";
